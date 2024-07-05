@@ -1,8 +1,9 @@
 from pymongo import MongoClient
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import MongoDBAtlasVectorSearch
-from langchain.document_loaders import DirectoryLoader
-from langchain.llms import OpenAI
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.llms import OpenAI
 import key_param
 
 # Set the MongoDB URI, DB, Collection Names

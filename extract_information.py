@@ -1,9 +1,9 @@
 from pymongo import MongoClient
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import MongoDBAtlasVectorSearch
-from langchain.document_loaders import DirectoryLoader
-from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_openai import AzureChatOpenAI
 import gradio as gr
 from gradio.themes.base import Base
 import key_param
@@ -15,11 +15,11 @@ collection = client[dbName][collectionName]
 
 # Define the text embedding model
  
-embeddings = OpenAIEmbeddings(openai_api_key=key_param.openai_api_key)
+embeddings = AzureOpenAIEmbeddings(azure_deployment="text-embedding-ada-002", openai_api_version="2023-05-15")
 
 # Initialize the Vector Store
 
-vectorStore = MongoDBAtlasVectorSearch( collection, embeddings )
+vectorStore = MongoDBAtlasVectorSearch( collection=collection, embedding=embeddings, index_name="vector_index" )
 
 def query_data(query):
     # Convert question to vector using OpenAI embeddings
@@ -27,7 +27,9 @@ def query_data(query):
     # similarity_search returns MongoDB documents most similar to the query    
 
     docs = vectorStore.similarity_search(query, K=1)
-    as_output = docs[0].page_content
+    as_output=""
+    if docs:
+        as_output = docs[0].page_content
 
     # Leveraging Atlas Vector Search paired with Langchain's QARetriever
 
@@ -35,7 +37,7 @@ def query_data(query):
     # If it's not specified (for example like in the code below),
     # then the default OpenAI model used in LangChain is OpenAI GPT-3.5-turbo, as of August 30, 2023
     
-    llm = OpenAI(openai_api_key=key_param.openai_api_key, temperature=0)
+    llm = AzureChatOpenAI(azure_deployment="gpt-35-turbo", api_version="2024-02-01", temperature=0, max_tokens=None, timeout=None, max_retries=2)
 
 
     # Get VectorStoreRetriever: Specifically, Retriever for MongoDB VectorStore.
@@ -49,10 +51,10 @@ def query_data(query):
 
     # Execute the chain
 
-    retriever_output = qa.run(query)
+    retriever_output = qa.invoke(query)
 
     # Return Atlas Vector Search output, and output generated using RAG Architecture
-    return as_output, retriever_output
+    return as_output, retriever_output["result"]
 
 # Create a web interface for the app, using Gradio
 
