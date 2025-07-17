@@ -1,8 +1,7 @@
 from pymongo import MongoClient
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import MongoDBAtlasVectorSearch
-from langchain.document_loaders import DirectoryLoader
-from langchain.llms import OpenAI
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain_community.vectorstores import MongoDBAtlasVectorSearch
+from langchain_openai import AzureChatOpenAI
 from langchain.chains import RetrievalQA
 import gradio as gr
 from gradio.themes.base import Base
@@ -11,45 +10,62 @@ import key_param
 client = MongoClient(key_param.MONGO_URI)
 dbName = "langchain_demo"
 collectionName = "collection_of_text_blobs"
+searchIndexName ="default"
 collection = client[dbName][collectionName]
 
 # Define the text embedding model
- 
-embeddings = OpenAIEmbeddings(openai_api_key=key_param.openai_api_key)
+embeddings = AzureOpenAIEmbeddings(deployment=key_param.AZURE_EMBEDDINGS_DEPLOYMENT, 
+                                    azure_endpoint = key_param.AZURE_OPENAI_ENDPOINT,
+                                    openai_api_version = key_param.AZURE_OPENAI_API_VERSION,
+                                    openai_api_key=key_param.AZURE_OPENAI_API_KEY,
+                                    show_progress_bar=True)
 
 # Initialize the Vector Store
 
-vectorStore = MongoDBAtlasVectorSearch( collection, embeddings )
+vectorStore = MongoDBAtlasVectorSearch.from_connection_string(key_param.MONGO_URI, f"{dbName}.{collectionName}", embeddings)
 
 def query_data(query):
     # Convert question to vector using OpenAI embeddings
     # Perform Atlas Vector Search using Langchain's vectorStore
-    # similarity_search returns MongoDB documents most similar to the query    
+    # similarity_search returns MongoDB documents most similar to the query
 
-    docs = vectorStore.similarity_search(query, K=1)
-    as_output = docs[0].page_content
+    # Get VectorStoreRetriever: Specifically, Retriever for MongoDB VectorStore.
+    # Implements _get_relevant_documents which retrieves documents relevant to a query.
+    retriever = vectorStore.as_retriever(search_type = "similarity", 
+                                         search_kwargs={"k": 1}, 
+                                         searchIndexName=searchIndexName)
 
     # Leveraging Atlas Vector Search paired with Langchain's QARetriever
+    docs = vectorStore.similarity_search(query, K=1)
+    as_output = docs[0].page_content
 
     # Define the LLM that we want to use -- note that this is the Language Generation Model and NOT an Embedding Model
     # If it's not specified (for example like in the code below),
     # then the default OpenAI model used in LangChain is OpenAI GPT-3.5-turbo, as of August 30, 2023
-    
-    llm = OpenAI(openai_api_key=key_param.openai_api_key, temperature=0)
+    # llm = AzureOpenAI(deployment_name=key_param.AZURE_LANGUAGE_DEPLOYMENT, 
+    #                   azure_endpoint = key_param.AZURE_OPENAI_ENDPOINT,
+    #                   openai_api_version = key_param.AZURE_OPENAI_API_VERSION,
+    #                   openai_api_key=key_param.AZURE_OPENAI_API_KEY, 
+    #                   temperature=0)
 
-
-    # Get VectorStoreRetriever: Specifically, Retriever for MongoDB VectorStore.
-    # Implements _get_relevant_documents which retrieves documents relevant to a query.
-    retriever = vectorStore.as_retriever()
+    llm = AzureChatOpenAI(azure_deployment=key_param.AZURE_LANGUAGE_DEPLOYMENT, 
+                      azure_endpoint = key_param.AZURE_OPENAI_ENDPOINT,
+                      openai_api_version = key_param.AZURE_OPENAI_API_VERSION,
+                      openai_api_key=key_param.AZURE_OPENAI_API_KEY, 
+                      temperature=0)
 
     # Load "stuff" documents chain. Stuff documents chain takes a list of documents,
     # inserts them all into a prompt and passes that prompt to an LLM.
 
-    qa = RetrievalQA.from_chain_type(llm, chain_type="stuff", retriever=retriever)
-
+    qa = RetrievalQA.from_chain_type(llm, 
+                                     chain_type="stuff", 
+                                     retriever=retriever)
+    
     # Execute the chain
 
-    retriever_output = qa.run(query)
+    retriever_output = qa.invoke(query)
+
+    retriever_output['result'] = retriever_output['result'].replace("\n"," ") 
 
     # Return Atlas Vector Search output, and output generated using RAG Architecture
     return as_output, retriever_output

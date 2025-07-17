@@ -1,0 +1,6 @@
+MONGO_URI = "<MongoDB URI>"
+AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
+AZURE_OPENAI_ENDPOINT = "https://<EndPoint Name>.azure.com/"
+AZURE_OPENAI_API_KEY = "<OpenAI Key>"
+AZURE_EMBEDDINGS_DEPLOYMENT = "<Deployment Name>"
+AZURE_LANGUAGE_DEPLOYMENT = "<Deployment Name>"
